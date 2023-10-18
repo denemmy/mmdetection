@@ -181,8 +181,9 @@ def inference_detector(
         # build the data pipeline
         data_ = test_pipeline(data_)
 
-        data_['inputs'] = [data_['inputs']]
-        data_['data_samples'] = [data_['data_samples']]
+        w_dtype = next(model.parameters()).dtype
+        data_['inputs'] = [data_['inputs'].to(w_dtype)]
+        data_['data_samples'] = [data_['data_samples'].to(w_dtype)]
 
         # forward the model
         with torch.no_grad():

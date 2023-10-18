@@ -482,8 +482,11 @@ class RTMDetInsHead(RTMDetHead):
         assert with_nms, 'with_nms must be True for RTMDet-Ins'
         if results.bboxes.numel() > 0:
             bboxes = get_box_tensor(results.bboxes)
-            det_bboxes, keep_idxs = batched_nms(bboxes, results.scores,
+            w_dtype = bboxes.dtype
+            det_bboxes, keep_idxs = batched_nms(bboxes.to(torch.float32), results.scores.to(torch.float32),
                                                 results.labels, cfg.nms)
+            det_bboxes = det_bboxes.to(w_dtype)
+
             results = results[keep_idxs]
             # some nms would reweight the score, such as softnms
             results.scores = det_bboxes[:, -1]
@@ -506,6 +509,7 @@ class RTMDetInsHead(RTMDetHead):
                     mode='bilinear',
                     align_corners=False)[..., :ori_h, :ori_w]
             masks = mask_logits.sigmoid().squeeze(0)
+            results.masks_probs = masks
             masks = masks > cfg.mask_thr_binary
             results.masks = masks
         else:
@@ -514,6 +518,10 @@ class RTMDetInsHead(RTMDetHead):
             results.masks = torch.zeros(
                 size=(results.bboxes.shape[0], h, w),
                 dtype=torch.bool,
+                device=results.bboxes.device)
+            results.masks_probs = torch.zeros(
+                size=(results.bboxes.shape[0], h, w),
+                dtype=torch.float32,
                 device=results.bboxes.device)
 
         return results
@@ -565,7 +573,7 @@ class RTMDetInsHead(RTMDetHead):
             mask_feat.unsqueeze(0)
 
         coord = self.prior_generator.single_level_grid_priors(
-            (h, w), level_idx=0, device=mask_feat.device).reshape(1, -1, 2)
+            (h, w), level_idx=0, device=mask_feat.device, dtype=mask_feat.dtype).reshape(1, -1, 2)
         num_inst = priors.shape[0]
         points = priors[:, :2].reshape(-1, 1, 2)
         strides = priors[:, 2:].reshape(-1, 1, 2)
